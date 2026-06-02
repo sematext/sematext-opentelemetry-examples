@@ -25,9 +25,9 @@ Or, for distributed-tracing across multiple services, jump to the [end-to-end ex
 | **[Java](java/)** | Spring Boot | Sematext Agent |
 | **[Python](python/)** | Flask | Sematext Agent |
 | **[.NET](dotnet/)** | ASP.NET Core | Sematext Agent |
-| **[Go](go/)** | Gin | Sematext Agent |
 | **[PHP](php/)** | Laravel | Sematext Agent |
-| **[Ruby](ruby/)** | Sinatra | Sematext Agent |
+| **[Go](https://sematext.com/docs/tracing/sdks/go/)** | Gin, Echo, etc. | Sematext Agent |
+| **[Ruby](https://sematext.com/docs/tracing/sdks/ruby/)** | Rails, Sinatra | Sematext Agent |
 
 **Note**: Node.js, Java, Python, .NET, and PHP examples are currently implemented. Other languages will follow the same structure (baremetal/docker/kubernetes with auto and manual instrumentation).
 
