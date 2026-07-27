@@ -8,6 +8,14 @@ user-invocable: true
 
 Use this skill to wire a service that emits OpenTelemetry data into Sematext Cloud. The skill is parameter-driven: ask the user the questions in the Triage section, then assemble the env-var block from the matrices below and point them at the matching reference example in this repo.
 
+## Agent constraints
+
+Two hard rules when running this skill:
+
+**Never handle real token values.** Do not ask the user to paste an App token, and do not accept one if offered. Every env-var block you produce keeps the literal placeholders (`<tracing-app-token>`, etc.) — the user substitutes real values themselves, outside the conversation. A token that appears in chat is in conversation history and agent context for good, and must be rotated in Sematext Cloud. If a user pastes one anyway, tell them to rotate it and continue with placeholders.
+
+**Never run the privileged commands.** The `sudo st-agent otel enable` commands in Flow B are for the user to run in their own shell. Print them for the user to copy; do not execute them, and do not offer to.
+
 ## Triage
 
 Ask the user, in order:
@@ -43,6 +51,8 @@ Ask the user, in order:
 ### Env-var block
 
 Set the headers only for the signals the user is wiring up. Each `<token>` is the token of the corresponding Sematext App.
+
+Emit this block **with the placeholders intact** — the user fills in real tokens themselves. See Agent constraints above. Point the user at their platform's secret store rather than a literal `export`: `--env-file` for Docker (never `ENV` in a Dockerfile — it persists in the image layer), a Secret for Kubernetes, encrypted variables in CI. A plain `export` also writes the token to shell history.
 
 ```bash
 # Endpoint + protocol — pick one row from the matrix above
@@ -87,7 +97,7 @@ export OTEL_SERVICE_NAME=my-service
 export OTEL_SERVICE_VERSION=1.0.0
 ```
 
-Agent enabling commands (run once per signal type the user wants):
+**For the user to run**, once per signal type they want. These reconfigure a system service and need root, so the user runs them in their own shell — present them for copying and do not execute them:
 
 ```bash
 sudo /opt/spm/spm-monitor/bin/st-agent otel enable --type traces
@@ -95,7 +105,7 @@ sudo /opt/spm/spm-monitor/bin/st-agent otel enable --type metrics
 sudo /opt/spm/spm-monitor/bin/st-agent otel enable --type logs
 ```
 
-See [Sematext Agent OpenTelemetry docs](https://sematext.com/docs/agents/sematext-agent/opentelemetry/) for install and enable details.
+Each opens a local OTLP listener on the port above. Those ports are plaintext HTTP and unauthenticated — they're meant for same-host traffic only, so the agent should be reachable from localhost and not exposed across the network. Verify against the [Sematext Agent OpenTelemetry docs](https://sematext.com/docs/agents/sematext-agent/opentelemetry/) before running, since paths and flags vary by agent version.
 
 ## Reference examples in this repo
 
@@ -159,7 +169,7 @@ If nothing arrives, see Troubleshooting below.
 | `Connection refused` on agent ports | Agent not running, or `st-agent otel enable --type <signal>` not run for that signal |
 | `Connection refused` on managed endpoint | Wrong protocol (gRPC URL with HTTP protocol setting or vice versa) |
 | Traces dropped intermittently | Batch size or queue full — bump `OTEL_BSP_MAX_QUEUE_SIZE` |
-| TLS errors against managed endpoint | Old SDK / system CA bundle missing — update OS certs or SDK |
+| TLS errors against managed endpoint | Old SDK / system CA bundle missing — update OS certs or SDK. Do not "fix" this by disabling certificate verification or setting the exporter to insecure; that sends the App token over an unverified connection. |
 | `X-API-TOKEN` header rejected | Hand-coded exporter that forces `Authorization: Bearer`; remove that and use the `OTEL_EXPORTER_OTLP_*_HEADERS` env var path instead |
 | CORS errors (browser/RUM) | Managed OTLP endpoint is server-to-server; browser-side instrumentation needs a different surface |
 
