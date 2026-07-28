@@ -1,18 +1,23 @@
 ---
 name: sematext-otel
-description: Wire a service's OpenTelemetry output to Sematext Cloud. Walks through region, App-type, instrumentation flow (managed OTLP endpoint vs Sematext Agent), and signal selection (traces/metrics/logs), then produces the exact env-var block and points at a runnable reference example in this repo. Invoke when instrumenting a new app for Sematext.
+description: Wire a service's OpenTelemetry (OTel) output to Sematext Cloud for observability and monitoring. Walks through region, App-type, instrumentation flow (managed OTLP endpoint vs Sematext Agent), and signal selection (traces/metrics/logs), then produces the exact env-var block and points at a runnable reference example in this repo. Invoke when instrumenting a new app for Sematext or sending telemetry to Sematext.
 user-invocable: true
 ---
 
 # Sematext OTel onboarding
 
-Use this skill to wire a service that emits OpenTelemetry data into Sematext Cloud. The skill is parameter-driven: ask the user the questions in the Triage section, then assemble the env-var block from the matrices below and point them at the matching reference example in this repo.
+Use this skill to wire a service that emits OpenTelemetry data into Sematext Cloud. It is parameter-driven; work through these in order:
+
+1. **Triage**: ask the six questions below to fix region, Apps, flow, protocol, language/env, and instrumentation style.
+2. **Assemble**: build the env-var block from Flow A (managed OTLP) or Flow B (Sematext Agent), placeholders intact.
+3. **Point**: send the user to the matching reference example in this repo.
+4. **Verify**: confirm data lands within 60s, looping through Troubleshooting until it does.
 
 ## Agent constraints
 
 Two hard rules when running this skill:
 
-**Never handle real token values.** Do not ask the user to paste an App token, and do not accept one if offered. Every env-var block you produce keeps the literal placeholders (`<tracing-app-token>`, etc.) — the user substitutes real values themselves, outside the conversation. A token that appears in chat is in conversation history and agent context for good, and must be rotated in Sematext Cloud. If a user pastes one anyway, tell them to rotate it and continue with placeholders.
+**Never handle real token values.** Do not ask the user to paste an App token, and do not accept one if offered. Every env-var block you produce keeps the literal placeholders (`<tracing-app-token>`, etc.); the user substitutes real values themselves, outside the conversation. A token that appears in chat is in conversation history and agent context for good, and must be rotated in Sematext Cloud. If a user pastes one anyway, tell them to rotate it and continue with placeholders.
 
 **Never run the privileged commands.** The `sudo st-agent otel enable` commands in Flow B are for the user to run in their own shell. Print them for the user to copy; do not execute them, and do not offer to.
 
@@ -31,11 +36,9 @@ Ask the user, in order:
 
 ## Sematext fundamentals
 
-**One token per App.** Each Tracing / Logs / Monitoring App you create in Sematext Cloud has its own `apiKey`-style token. You wire them as separate signal-specific headers — the OTel exporter sends each signal to whichever App's token is set, and skips signals with no header.
-
-**Custom auth header.** Sematext uses `X-API-TOKEN=<token>`, **not** the standard `Authorization: Bearer …`. Some hand-coded OTLP exporters assume Bearer; those need overriding. The env-var path below works uniformly across language SDKs.
-
-**Region matters.** Different OTLP endpoint hostnames for US vs EU. The token also belongs to one region; using a US token against the EU endpoint will silently drop data.
+- **One token per App.** Each Tracing / Logs / Monitoring App has its own token, wired as a separate signal-specific header. Signals with no header are skipped.
+- **Custom auth header.** Sematext uses `X-API-TOKEN=<token>`, **not** `Authorization: Bearer …`. Hand-coded exporters that assume Bearer need overriding; the env-var path below works uniformly across SDKs.
+- **Region-bound tokens.** US and EU have different endpoint hostnames, and a token belongs to one region. A US token against the EU endpoint drops data silently, with no error.
 
 ## Flow A — Managed OTLP endpoint
 
@@ -52,7 +55,7 @@ Ask the user, in order:
 
 Set the headers only for the signals the user is wiring up. Each `<token>` is the token of the corresponding Sematext App.
 
-Emit this block **with the placeholders intact** — the user fills in real tokens themselves. See Agent constraints above. Point the user at their platform's secret store rather than a literal `export`: `--env-file` for Docker (never `ENV` in a Dockerfile — it persists in the image layer), a Secret for Kubernetes, encrypted variables in CI. A plain `export` also writes the token to shell history.
+Emit this block **with the placeholders intact**; the user fills in real tokens themselves. See Agent constraints above. Point the user at their platform's secret store rather than a literal `export`: `--env-file` for Docker (never `ENV` in a Dockerfile, since it persists in the image layer), a Secret for Kubernetes, encrypted variables in CI. A plain `export` also writes the token to shell history.
 
 ```bash
 # Endpoint + protocol — pick one row from the matrix above
@@ -97,7 +100,7 @@ export OTEL_SERVICE_NAME=my-service
 export OTEL_SERVICE_VERSION=1.0.0
 ```
 
-**For the user to run**, once per signal type they want. These reconfigure a system service and need root, so the user runs them in their own shell — present them for copying and do not execute them:
+**For the user to run**, once per signal type they want. These reconfigure a system service and need root, so the user runs them in their own shell. Present them for copying and do not execute them:
 
 ```bash
 sudo /opt/spm/spm-monitor/bin/st-agent otel enable --type traces
@@ -105,7 +108,7 @@ sudo /opt/spm/spm-monitor/bin/st-agent otel enable --type metrics
 sudo /opt/spm/spm-monitor/bin/st-agent otel enable --type logs
 ```
 
-Each opens a local OTLP listener on the port above. Those ports are plaintext HTTP and unauthenticated — they're meant for same-host traffic only, so the agent should be reachable from localhost and not exposed across the network. Verify against the [Sematext Agent OpenTelemetry docs](https://sematext.com/docs/agents/sematext-agent/opentelemetry/) before running, since paths and flags vary by agent version.
+Each opens a local OTLP listener on the port above. Those ports are plaintext HTTP and unauthenticated, meant for same-host traffic only, so the agent should be reachable from localhost and not exposed across the network. Verify against the [Sematext Agent OpenTelemetry docs](https://sematext.com/docs/agents/sematext-agent/opentelemetry/) before running, since paths and flags vary by agent version.
 
 ## Reference examples in this repo
 
@@ -157,7 +160,7 @@ Within 60 seconds of starting the instrumented service:
 | Metrics | Monitoring App → look for the OTel metric names emitted by your SDK |
 | Logs | Logs App → filter by `service.name` |
 
-If nothing arrives, see Troubleshooting below.
+If nothing arrives, loop until it does: match the symptom in Troubleshooting below, apply the fix, restart the instrumented service, then re-check the table above after 60s. If two passes produce no data, drop to the narrowest test you can (one signal, `OTEL_LOG_LEVEL=debug` for exporter errors) before changing anything else.
 
 ## Troubleshooting
 
