@@ -1,0 +1,9 @@
+{
+  "name": "sematext/sematext-otel",
+  "description": "Wire a service's OpenTelemetry (OTel) output to Sematext Cloud for observability and monitoring. Walks through region, App-type, instrumentation flow (managed OTLP endpoint vs Sematext Agent), and signal selection (traces/metrics/logs), then produces the exact env-var block and points at a runnable reference example in this repo. Invoke when instrumenting a new app for Sematext or sending telemetry to Sematext.",
+  "private": true,
+  "skills": [
+    "."
+  ],
+  "version": "0.1.0"
+}
