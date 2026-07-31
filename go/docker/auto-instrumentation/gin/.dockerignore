@@ -1,0 +1,11 @@
+.env
+.env.local
+*.md
+Dockerfile
+.dockerignore
+docker-compose.yaml
+obi-config.yaml
+
+# Local build output
+gin
+app

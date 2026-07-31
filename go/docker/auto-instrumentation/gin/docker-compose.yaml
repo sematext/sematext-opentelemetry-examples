@@ -1,0 +1,57 @@
+# OpenTelemetry eBPF Instrumentation (OBI) + Go Gin app, exporting to the
+# Sematext managed OTLP endpoint.
+#
+# Requires a Linux host — see README.md. Tokens are read from a .env file in
+# this directory: copy .env.example to .env and fill in your values.
+# Never commit .env.
+
+services:
+  go-app:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      # Service identity. OBI sets this for the traces and metrics it generates;
+      # the app sets it here so its logs land under the same service in Sematext.
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-go-gin-docker-auto}
+      - OTEL_RESOURCE_ATTRIBUTES=service.version=1.0.0,deployment.environment=development
+
+      # OBI does not export logs, so the app ships its own logs via OTLP.
+      # Traces and metrics come from OBI below.
+      - OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=${SEMATEXT_OTLP_ENDPOINT:-https://otlp-receiver.eu.sematext.com}/v1/logs
+      - OTEL_EXPORTER_OTLP_LOGS_HEADERS=X-API-TOKEN=${SEMATEXT_LOGS_TOKEN:?set SEMATEXT_LOGS_TOKEN in .env}
+      - OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/protobuf
+
+      - PORT=8090
+      - GIN_MODE=release
+    restart: unless-stopped
+
+  obi:
+    # OBI is v0 and documents breaking changes between minor releases, so pin an
+    # exact version rather than tracking a moving tag.
+    image: otel/ebpf-instrument:v0.10.0
+    # Share the target's PID namespace so OBI can attach its eBPF probes.
+    pid: "service:go-app"
+    privileged: true
+    environment:
+      # --- OBI's own configuration (OTEL_EBPF_* prefix) ---
+      # Port the target app listens on — how OBI identifies the process.
+      - OTEL_EBPF_OPEN_PORT=8090
+      - OTEL_EBPF_CONFIG_PATH=/etc/obi/config.yaml
+      - OTEL_EBPF_LOG_LEVEL=${OTEL_EBPF_LOG_LEVEL:-info}
+
+      # --- Export configuration (standard OTEL_EXPORTER_OTLP_* variables) ---
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-go-gin-docker-auto}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${SEMATEXT_OTLP_ENDPOINT:-https://otlp-receiver.eu.sematext.com}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+
+      # Per-signal Sematext App tokens.
+      - OTEL_EXPORTER_OTLP_TRACES_HEADERS=X-API-TOKEN=${SEMATEXT_TRACES_TOKEN:?set SEMATEXT_TRACES_TOKEN in .env}
+      - OTEL_EXPORTER_OTLP_METRICS_HEADERS=X-API-TOKEN=${SEMATEXT_MONITORING_TOKEN:?set SEMATEXT_MONITORING_TOKEN in .env}
+    volumes:
+      - /sys/kernel/debug:/sys/kernel/debug
+      - /sys/fs/bpf:/sys/fs/bpf
+      - ./obi-config.yaml:/etc/obi/config.yaml:ro
+    depends_on:
+      - go-app
+    restart: unless-stopped

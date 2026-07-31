@@ -1,0 +1,26 @@
+# OpenTelemetry eBPF Instrumentation (OBI) configuration.
+#
+# Verified against OBI v0.10.0 (pkg/obi/config.go).
+#
+# Endpoints and credentials are NOT set here — they come from the standard
+# OTEL_EXPORTER_OTLP_* environment variables in docker-compose.yaml, so there is
+# a single source of truth and no risk of committing a token.
+
+# Select the process to instrument by its listening port. Matches
+# OTEL_EBPF_OPEN_PORT in compose; either mechanism works, this file documents it.
+discovery:
+  instrument:
+    - open_ports: 8090
+
+# Traces pipeline. Protocol only — endpoint and headers come from the environment.
+otel_traces_export:
+  protocol: http/protobuf
+
+# Metrics pipeline.
+#   application      - RED metrics (rate, errors, duration) per service
+#   application_span - span-derived metrics
+otel_metrics_export:
+  protocol: http/protobuf
+  features:
+    - application
+    - application_span
