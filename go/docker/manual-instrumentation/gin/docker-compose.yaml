@@ -1,0 +1,71 @@
+# Sematext Agent + Go Gin app.
+#
+# The app ships OTLP/HTTP to the local Sematext Agent, which forwards to
+# Sematext Cloud. Tokens are read from a .env file in this directory — copy
+# .env.example to .env and fill in your values. Never commit .env.
+
+services:
+  sematext-agent:
+    image: sematext/agent:latest-4
+    privileged: true
+    environment:
+      # Infrastructure token from your Sematext account.
+      - INFRA_TOKEN=${INFRA_TOKEN:?set INFRA_TOKEN in .env}
+
+      # US for Sematext Cloud US, EU for Sematext Cloud EU.
+      - REGION=${REGION:-US}
+
+      # Enable the OpenTelemetry receivers.
+      - OTEL_ENABLED=true
+      - OTEL_TRACES_ENABLED=true
+      - OTEL_METRICS_ENABLED=true
+      - OTEL_LOGS_ENABLED=true
+
+      # Per-signal App tokens. The MY_TOKEN_GROUP name is arbitrary — it just
+      # groups these three tokens plus the services they apply to.
+      - OTEL_MY_TOKEN_GROUP_TRACES_TOKEN=${SEMATEXT_TRACES_TOKEN:?set SEMATEXT_TRACES_TOKEN in .env}
+      - OTEL_MY_TOKEN_GROUP_MONITORING_TOKEN=${SEMATEXT_MONITORING_TOKEN:?set SEMATEXT_MONITORING_TOKEN in .env}
+      - OTEL_MY_TOKEN_GROUP_LOGS_TOKEN=${SEMATEXT_LOGS_TOKEN:?set SEMATEXT_LOGS_TOKEN in .env}
+      - OTEL_MY_TOKEN_GROUP_SERVICES=all-services
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      - /:/hostfs:ro,rslave
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+      - /var/run/:/var/run
+      - /sys/kernel/debug:/sys/kernel/debug
+      - /sys:/host/sys:ro
+      - /dev:/hostfs/dev:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "4317:4317"  # Metrics gRPC
+      - "4318:4318"  # Metrics HTTP
+      - "4327:4327"  # Logs gRPC
+      - "4328:4328"  # Logs HTTP
+      - "4337:4337"  # Traces gRPC
+      - "4338:4338"  # Traces HTTP
+    restart: unless-stopped
+
+  go-app:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      # Service identity — this is what groups telemetry in Sematext.
+      - OTEL_SERVICE_NAME=go-gin-docker-manual
+      - OTEL_RESOURCE_ATTRIBUTES=service.version=1.0.0,deployment.environment=development
+
+      # The Sematext Agent listens on a different port per signal, so each
+      # signal needs its own endpoint. These are absolute URLs: the SDK posts
+      # directly to them and does not append /v1/traces etc.
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://sematext-agent:4338
+      - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://sematext-agent:4318
+      - OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://sematext-agent:4328
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+
+      - PORT=8090
+      - GIN_MODE=release
+    depends_on:
+      - sematext-agent
+    restart: unless-stopped

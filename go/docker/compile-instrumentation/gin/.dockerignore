@@ -1,0 +1,13 @@
+.env
+.env.local
+*.md
+Dockerfile
+.dockerignore
+docker-compose.yaml
+
+# Local build output
+gin
+app
+
+# otelc build artifacts
+.otelc-build/

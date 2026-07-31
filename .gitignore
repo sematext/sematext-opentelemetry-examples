@@ -65,3 +65,6 @@ vendor/bundle/
 # Temporary files
 tmp/
 temp/
+
+# otelc compile-time instrumentation build artifacts
+.otelc-build/

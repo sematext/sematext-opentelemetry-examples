@@ -1,0 +1,10 @@
+.env
+.env.local
+*.md
+Dockerfile
+.dockerignore
+docker-compose.yaml
+
+# Local build output (the binary name matches the directory when built with `go build`)
+gin
+app
